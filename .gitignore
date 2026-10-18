@@ -1,0 +1,7 @@
+# Live app data: users, password hashes, listings, uploads and the Google Maps key. Never commit.
+data/
+*.tmp
+
+.claude/
+.DS_Store
+node_modules/

@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Land Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap">
+<link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><i></i><span id="appName">Land Map</span></div>
+  <nav class="tabs" id="tabs"></nav>
+  <div class="search">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+    <input id="searchIn" placeholder="Search village, address or lat, long" autocomplete="off">
+    <div class="results" id="results" hidden></div>
+  </div>
+  <span class="spacer"></span>
+  <span class="userchip" id="userChip"></span>
+  <button type="button" class="ghost iconbtn" id="accountBtn" title="Account" aria-label="Account"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg></button>
+</header>
+
+<div class="main">
+  <div class="mapwrap" id="mapWrap">
+    <div id="map"></div>
+    <div class="mapctl tr">
+      <button type="button" class="fab panelbtn" id="panelBtn" title="Show panel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/><path d="M10 9l-3 3 3 3"/></svg></button>
+      <button type="button" class="fab" id="layersBtn" title="Map layers"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg></button>
+      <div class="layers-pop" id="layersPop"></div>
+      <button type="button" class="fab" id="locateBtn" title="Show my live location"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
+    </div>
+  </div>
+
+  <aside class="panel" id="panel">
+    <div class="panel-head" id="panelHead"><span id="panelTitle">Listings</span><span class="small" id="panelToggle">Hide</span></div>
+    <div class="panel-body">
+
+      <section class="view" id="view-listings">
+        <div class="section">
+          <h2>Listings</h2>
+          <div class="filters" id="filters">
+            <button type="button" data-f="all" class="on">All</button>
+            <button type="button" data-f="available"><i class="dot" style="background:var(--avail)"></i> Available</button>
+            <button type="button" data-f="hold"><i class="dot" style="background:var(--hold)"></i> Hold</button>
+            <button type="button" data-f="sold"><i class="dot" style="background:var(--sold)"></i> Sold</button>
+          </div>
+        </div>
+        <div id="detail" class="section" hidden></div>
+        <div id="listingList" class="section"></div>
+      </section>
+
+      <section class="view" id="view-measure" hidden>
+        <div class="section">
+          <h2>Measure</h2>
+          <p class="small" style="margin:0">Tap corners on the map. You can drag and zoom between taps. Nothing here is saved.</p>
+          <div class="row">
+            <button type="button" class="primary" id="mPlot">Measure area</button>
+            <button type="button" id="mLine">Measure distance</button>
+            <button type="button" class="ghost danger" id="mClear">Clear all</button>
+          </div>
+        </div>
+        <div id="measureList" class="section"></div>
+      </section>
+
+      <section class="view" id="view-sketch" hidden>
+        <div class="section">
+          <h2>Sketch</h2>
+          <p class="small" style="margin:0">Pick <b>Pen</b> to draw, <b>Move</b> to pan. Scroll or pinch to zoom any time; your drawing stays on the map. <b>Save</b> is on the toolbar too.</p>
+          <div class="field"><label for="sketchName">Sketch name</label><input id="sketchName" placeholder="e.g. Road plan for Sy. 997"></div>
+          <div class="row">
+            <button type="button" class="primary" id="sketchSave">Save</button>
+            <button type="button" id="sketchNew">New sketch</button>
+            <button type="button" class="ghost danger" id="sketchClear">Clear</button>
+          </div>
+          <p class="small" id="sketchState" style="margin:0"></p>
+        </div>
+        <div class="section"><h2>My saved sketches</h2><div id="sketchList"></div></div>
+      </section>
+
+      <section class="view" id="view-account" hidden>
+        <div class="section">
+          <h2>Account</h2>
+          <p style="margin:0" id="accountWho"></p>
+          <form id="pwForm" class="section">
+            <div class="field"><label for="pwCur">Current password</label><input id="pwCur" type="password" autocomplete="current-password" required></div>
+            <div class="field"><label for="pwNew">New password</label><input id="pwNew" type="password" autocomplete="new-password" minlength="6" required></div>
+            <button class="primary" type="submit">Change password</button>
+          </form>
+          <button type="button" id="logoutBtn">Sign out</button>
+        </div>
+      </section>
+
+    </div>
+  </aside>
+</div>
+
+<script src="/vendor/leaflet/leaflet.js"></script>
+<script src="/map-core.js"></script>
+<script>
+(async () => {
+const { $, esc, api, toast } = LM;
+const me = await api('GET', '/api/me');
+const S = me.settings;
+document.title = S.appName; $('appName').textContent = S.appName;
+$('userChip').textContent = me.user.name;
+$('accountWho').textContent = 'Signed in as ' + me.user.name + ' (' + me.user.username + ')';
+
+const ctx = LM.createMap($('map'), S);
+const map = ctx.map;
+if (S.googleKey) ctx.loadGoogle(S.googleKey);
+const surveyAllowed = () => !!S.showSurvey;
+if (S.showSurvey) { const saved = LM.lsGet('lm.survey'); ctx.setSurvey(saved === null ? S.surveyOnByDefault : saved === '1'); }
+ctx.onChange(() => { if (S.showSurvey) LM.lsSet('lm.survey', ctx.cad.on ? '1' : '0'); });
+LM.LayersControl(ctx, $('layersBtn'), $('layersPop'), { surveyAllowed });
+LM.Locate(ctx, $('locateBtn'));
+LM.Search(ctx, $('searchIn'), $('results'));
+const draw = LM.DrawTool(ctx, $('mapWrap'));
+const sketch = LM.Sketch(ctx, $('mapWrap'));
+const measure = LM.Measure(ctx, draw, $('measureList'));
+
+// ---------- tabs ----------
+const TABS = [['listings', 'Listings'], ['measure', 'Measure'], ['sketch', 'Sketch']].filter(([k]) => S.tabs[k]);
+let tab = null;
+$('tabs').innerHTML = TABS.map(([k, t]) => '<button type="button" data-tab="' + k + '">' + t + '</button>').join('');
+$('tabs').hidden = TABS.length < 2;
+$('tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) setTab(b.dataset.tab); });
+let sketchPanelWas = null;
+function setTab(t) {
+  if (tab === t) return;
+  draw.cancel(true);
+  if (tab === 'sketch') { sketch.disable(); document.body.classList.remove('sketching'); if (sketchPanelWas) panel.open(); sketchPanelWas = null; }
+  if (tab === 'measure') measure.hide();
+  tab = t;
+  document.querySelectorAll('#tabs [data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
+  ['listings', 'measure', 'sketch', 'account'].forEach(v => $('view-' + v).hidden = v !== t);
+  $('panelTitle').textContent = ({ listings: 'Listings', measure: 'Measure', sketch: 'Sketch', account: 'Account' })[t];
+  if (t === 'measure') measure.show();
+  if (t === 'sketch') { sketch.enable(); document.body.classList.add('sketching'); sketchPanelWas = panel.isOpen(); panel.close(); } else sketch.hideLayer();
+  listingLayer.eachLayer(l => l.setStyle && l.setStyle({ interactive: t === 'listings' }));
+  LM.lsSet('lm.tab', t);
+}
+$('accountBtn').onclick = () => { setTab(tab === 'account' ? (TABS[0] || ['listings'])[0] : 'account'); if (tab === 'account') panel.open(); };
+const panel = LM.Panel(ctx, $('panel'), $('panelHead'), $('panelToggle'), $('panelBtn'));
+
+// ---------- listings ----------
+const listingLayer = L.featureGroup();
+if (S.tabs.listings) listingLayer.addTo(map);
+const selLabels = L.featureGroup().addTo(map);
+let listings = [], filter = 'all', selected = null;
+async function loadListings() {
+  listings = (await api('GET', '/api/listings')).listings;
+  drawListings(); renderList();
+  if (listings.length && !LM.lsGet('lm.seenFit')) { map.fitBounds(listingLayer.getBounds(), { maxZoom: 17, padding: [40, 40] }); LM.lsSet('lm.seenFit', '1'); }
+}
+function drawListings() {
+  listingLayer.clearLayers();
+  listings.forEach(l => {
+    if (filter !== 'all' && l.status !== filter) return;
+    const c = LM.COLORS[l.status] || LM.COLORS.available;
+    const poly = L.polygon(LM.toLL(l.coords), { color: c, weight: selected === l.id ? 4 : 2.5, fillColor: c, fillOpacity: l.status === 'sold' ? 0.45 : 0.28 });
+    poly.bindTooltip(esc(l.name || 'Listing') + ' · ' + LM.areaText(LM.sphericalArea(LM.toLL(l.coords))), { sticky: true, className: 'listing-tip' });
+    poly.on('click', e => { if (tab !== 'listings') return; L.DomEvent.stop(e); select(l.id, false); });
+    listingLayer.addLayer(poly);
+  });
+}
+function renderList() {
+  const items = listings.filter(l => filter === 'all' || l.status === filter);
+  $('listingList').innerHTML = items.length ? items.map(l => {
+    const a = LM.areaParts(LM.sphericalArea(LM.toLL(l.coords)));
+    return '<button type="button" class="item' + (l.id === selected ? ' sel' : '') + '" data-id="' + l.id + '">' +
+      '<span class="t"><i class="dot" style="background:' + LM.COLORS[l.status] + '"></i>' + esc(l.name || 'Listing') + '</span>' +
+      '<span class="small">' + [l.village, l.mandal].filter(Boolean).map(esc).join(', ') + (l.survey ? ' · Sy. ' + esc(l.survey) : '') + '</span>' +
+      '<span class="small"><b class="num">' + LM.areaText(a.m2) + '</b> · ' + LM.rupeeShort(l.ask) + ' / acre</span></button>';
+  }).join('') : '<p class="empty">No listings to show.</p>';
+  $('listingList').querySelectorAll('[data-id]').forEach(b => b.onclick = () => select(b.dataset.id, true));
+}
+function select(id, fly) {
+  selected = id; const l = listings.find(x => x.id === id); if (!l) return;
+  const ll = LM.toLL(l.coords); drawListings(); renderList();
+  LM.edgeLabels(ctx, selLabels, ll, true, false);
+  if (fly) map.fitBounds(L.latLngBounds(ll), { maxZoom: 19, padding: [50, 50] });
+  const a = LM.areaParts(LM.sphericalArea(ll)), totalFor = v => LM.num(v) ? LM.rupeeShort(LM.num(v) * a.acres) : '—';
+  const photos = (l.files || []).filter(f => f.public !== false);
+  $('detail').hidden = false;
+  $('detail').innerHTML = '<div class="card">' +
+    '<div class="row" style="justify-content:space-between;align-items:flex-start"><h3>' + esc(l.name || 'Listing') + '</h3><button type="button" class="ghost" id="closeDetail" title="Close">✕</button></div>' +
+    '<div><span class="badge ' + l.status + '">' + LM.STATUS[l.status] + '</span></div>' +
+    '<div class="small">' + [l.village, l.mandal, l.district].filter(Boolean).map(esc).join(', ') + (l.survey ? ' · Survey no. ' + esc(l.survey) : '') + '</div>' +
+    '<div class="kv"><span>Area</span><b>' + LM.areaText(a.m2) + '</b><span>Acres</span><b>' + a.acres.toFixed(3) + '</b><span>Sq yards</span><b>' + LM.fmt(a.sqyd) + '</b>' +
+    '<span>Boundary</span><b>' + ctx.unitText(LM.pathLength(ll, true)) + '</b></div>' +
+    '<div class="small">Sides</div><div class="sides">' + LM.sideList(ctx, ll, true).map((t, k) => '<span>' + String.fromCharCode(65 + (k % 26)) + ': ' + t + '</span>').join('') + '</div>' +
+    '<div class="kv" style="margin-top:4px"><span>Asking / acre</span><b>' + LM.rupee(l.ask) + '</b><span>Asking total</span><b>' + totalFor(l.ask) + '</b>' +
+    (LM.num(l.neg) ? '<span>Negotiation / acre</span><b>' + LM.rupee(l.neg) + '</b>' : '') +
+    (LM.num(l.final) ? '<span>Final / acre</span><b>' + LM.rupee(l.final) + '</b><span>Final total</span><b>' + totalFor(l.final) + '</b>' : '') + '</div>' +
+    (l.description ? '<p style="margin:4px 0 0;white-space:pre-wrap">' + esc(l.description) + '</p>' : '') +
+    (l.contact ? '<div class="row" style="justify-content:space-between"><span>Contact: <b>' + esc(l.contact) + '</b></span></div>' : '') +
+    (photos.length ? '<div class="photos">' + photos.map(f => '<div class="photo">' + (f.type.startsWith('image/') ? '<a href="/files/' + esc(f.stored) + '" target="_blank" rel="noopener"><img alt="" loading="lazy" src="/files/' + esc(f.stored) + '"></a>' : '<a href="/files/' + esc(f.stored) + '" target="_blank" rel="noopener">' + esc(f.name) + '</a>') + '</div>').join('') + '</div>' : '') +
+    '<a class="small" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=' + LM.centroid(ll).lat.toFixed(6) + ',' + LM.centroid(ll).lng.toFixed(6) + '">Directions in Google Maps</a>' +
+    '</div>';
+  $('closeDetail').onclick = () => { selected = null; $('detail').hidden = true; selLabels.clearLayers(); drawListings(); renderList(); };
+  panel.open();
+}
+ctx.onChange(() => { if (selected) { const l = listings.find(x => x.id === selected); if (l) select(selected, false); } });
+$('filters').addEventListener('click', e => {
+  const b = e.target.closest('[data-f]'); if (!b) return; filter = b.dataset.f;
+  $('filters').querySelectorAll('[data-f]').forEach(x => x.classList.toggle('on', x === b)); drawListings(); renderList();
+});
+
+// ---------- measure ----------
+$('mPlot').onclick = () => measure.start('plot');
+$('mLine').onclick = () => measure.start('line');
+$('mClear').onclick = () => { draw.cancel(true); measure.clear(); };
+
+// ---------- sketch ----------
+let currentSketch = null, sketches = [];
+function sketchState() { $('sketchState').textContent = currentSketch ? (sketch.dirty ? 'Unsaved changes' : 'Saved') : (sketch.items.length ? 'Not saved yet' : ''); }
+sketch.onDirty = sketchState;
+sketch.onSave = () => $('sketchSave').click();
+async function loadSketches() { sketches = (await api('GET', '/api/sketches')).sketches; renderSketches(); }
+function renderSketches() {
+  $('sketchList').innerHTML = sketches.length ? sketches.slice().sort((a, b) => b.updatedAt - a.updatedAt).map(s =>
+    '<div class="item' + (currentSketch && currentSketch.id === s.id ? ' sel' : '') + '"><span class="t">' + esc(s.name) + '</span><span class="small">' + new Date(s.updatedAt).toLocaleString() + ' · ' + s.items.length + ' marks</span>' +
+    '<div class="row"><button type="button" data-open="' + s.id + '">Open</button><button type="button" class="ghost danger" data-del="' + s.id + '">Delete</button></div></div>').join('') : '<p class="empty">No saved sketches yet.</p>';
+  $('sketchList').querySelectorAll('[data-open]').forEach(b => b.onclick = () => {
+    const s = sketches.find(x => x.id === b.dataset.open); currentSketch = s; sketch.load(s.items); $('sketchName').value = s.name;
+    if (s.view) map.setView(s.view.center, s.view.zoom); renderSketches(); sketchState();
+  });
+  $('sketchList').querySelectorAll('[data-del]').forEach(b => {
+    let armed = false;
+    b.onclick = async () => {
+      if (!armed) { armed = true; b.textContent = 'Tap again to delete'; setTimeout(() => { armed = false; b.textContent = 'Delete'; }, 2500); return; }
+      await api('DELETE', '/api/sketches/' + b.dataset.del);
+      if (currentSketch && currentSketch.id === b.dataset.del) { currentSketch = null; sketch.load([]); $('sketchName').value = ''; }
+      loadSketches(); sketchState();
+    };
+  });
+}
+$('sketchSave').onclick = async () => {
+  if (!sketch.items.length) return toast('Draw something first.');
+  const c = map.getCenter();
+  const r = await api('POST', '/api/sketches', { id: currentSketch && currentSketch.id, name: $('sketchName').value.trim() || 'Sketch ' + new Date().toLocaleDateString(), items: sketch.items, view: { center: [c.lat, c.lng], zoom: map.getZoom() } });
+  currentSketch = r.sketch; sketch.dirty = false; $('sketchName').value = r.sketch.name; toast('Sketch saved'); loadSketches(); sketchState();
+};
+$('sketchNew').onclick = () => { currentSketch = null; sketch.load([]); $('sketchName').value = ''; renderSketches(); sketchState(); };
+$('sketchClear').onclick = () => { sketch.clear(); sketchState(); };
+
+// ---------- account ----------
+$('pwForm').onsubmit = async e => {
+  e.preventDefault();
+  try { await api('POST', '/api/me/password', { current: $('pwCur').value, password: $('pwNew').value }); toast('Password changed'); e.target.reset(); }
+  catch (ex) { toast(ex.message); }
+};
+$('logoutBtn').onclick = async () => { await api('POST', '/api/logout'); location.href = '/login'; };
+
+// ---------- start ----------
+const startTab = LM.lsGet('lm.tab');
+setTab(TABS.some(([k]) => k === startTab) ? startTab : (TABS[0] ? TABS[0][0] : 'account'));
+if (!TABS.length) $('view-account').insertAdjacentHTML('afterbegin', '<p class="empty">No tools are switched on for your account yet. Ask the admin.</p>');
+loadListings(); loadSketches();
+})().catch(e => console.error(e));
+</script>
+</body>
+</html>

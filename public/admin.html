@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Admin · Land Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap">
+<link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="/vendor/geoman/leaflet-geoman.css">
+<link rel="stylesheet" href="/style.css">
+<style>
+  .admin-tag { font: 700 10px/1 var(--font); letter-spacing: .08em; text-transform: uppercase; background: #18241d; color: #fff; padding: 4px 6px; border-radius: 5px; }
+  .pubrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 10px; background: var(--soft); }
+  .wide .panel { --pw: 440px; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><i></i><span id="appName">Land Map</span> <span class="admin-tag">Admin</span></div>
+  <nav class="tabs" id="tabs">
+    <button type="button" data-tab="listings">Listings</button>
+    <button type="button" data-tab="measure">Measure</button>
+    <button type="button" data-tab="sketch">Sketch</button>
+    <button type="button" data-tab="users">Users</button>
+    <button type="button" data-tab="settings">Settings</button>
+  </nav>
+  <div class="search">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+    <input id="searchIn" placeholder="Search village, address or lat, long" autocomplete="off">
+    <div class="results" id="results" hidden></div>
+  </div>
+  <span class="spacer"></span>
+  <a class="small" href="/app" title="See what users see">User view</a>
+  <button type="button" class="ghost" id="logoutBtn">Sign out</button>
+</header>
+
+<div class="main" id="mainEl">
+  <div class="mapwrap" id="mapWrap">
+    <div id="map"></div>
+    <div class="mapctl tr">
+      <button type="button" class="fab panelbtn" id="panelBtn" title="Show panel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/><path d="M10 9l-3 3 3 3"/></svg></button>
+      <button type="button" class="fab" id="layersBtn" title="Map layers"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg></button>
+      <div class="layers-pop" id="layersPop"></div>
+      <button type="button" class="fab" id="locateBtn" title="Show my live location"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
+    </div>
+    <div class="drawbar" id="cornerBar" hidden>
+      <div class="ttl">Edit corners</div>
+      <div class="stats" id="cornerStats"></div>
+      <div class="hint">Drag the white dots to move corners. Tap a middle dot to add a corner.</div>
+      <div class="row"><button type="button" class="primary" id="cornerDone">Done</button></div>
+    </div>
+  </div>
+
+  <aside class="panel" id="panel">
+    <div class="panel-head" id="panelHead"><span id="panelTitle">Listings</span><span class="small" id="panelToggle">Hide</span></div>
+    <div class="panel-body">
+
+      <!-- LISTINGS -->
+      <section class="view" id="view-listings">
+        <div class="section" id="listHome">
+          <div class="row" style="justify-content:space-between"><h2 style="margin:0">All listings</h2><button type="button" class="primary" id="newListing">+ New listing</button></div>
+          <p class="small" style="margin:0">Draw the plot on the map, fill the details, then switch on <b>Published</b> so users can see it.</p>
+          <div class="filters" id="filters">
+            <button type="button" data-f="all" class="on">All</button><button type="button" data-f="published">Published</button><button type="button" data-f="draft">Drafts</button>
+            <button type="button" data-f="available">Available</button><button type="button" data-f="hold">Hold</button><button type="button" data-f="sold">Sold</button>
+          </div>
+          <div id="listingList" class="section"></div>
+        </div>
+
+        <form id="editor" class="section" hidden>
+          <div class="row" style="justify-content:space-between"><button type="button" class="ghost" id="backBtn">← All listings</button><span class="small" id="saveState"></span></div>
+          <div class="pubrow"><div><b>Published</b><div class="small">When on, users can see this listing.</div></div><label class="switch" style="margin:0"><input type="checkbox" id="ePublished"></label></div>
+          <div class="card" id="eGeo"></div>
+          <div class="row">
+            <button type="button" id="eEditCorners">Edit corners</button>
+            <button type="button" id="eRedraw">Redraw boundary</button>
+          </div>
+          <div class="field"><label for="eName">Title</label><input id="eName" placeholder="e.g. 5 acres near Chevella, black soil" required></div>
+          <div class="grid2">
+            <div class="field"><label for="eStatus">Status</label><select id="eStatus"><option value="available">Available</option><option value="hold">Hold / negotiation</option><option value="sold">Sold</option></select></div>
+            <div class="field"><label for="eSurvey">Survey no.</label><input id="eSurvey"></div>
+            <div class="field"><label for="eVillage">Village</label><input id="eVillage"></div>
+            <div class="field"><label for="eMandal">Mandal</label><input id="eMandal"></div>
+            <div class="field"><label for="eDistrict">District</label><input id="eDistrict"></div>
+            <div class="field"><label for="eContact">Contact shown to users</label><input id="eContact"></div>
+            <div class="field"><label for="eAsk">Asking (₹ / acre)</label><input id="eAsk" inputmode="numeric"></div>
+            <div class="field"><label for="eNeg">Negotiation (₹ / acre)</label><input id="eNeg" inputmode="numeric"></div>
+            <div class="field"><label for="eFinal">Final (₹ / acre)</label><input id="eFinal" inputmode="numeric"></div>
+            <div class="field"><label>Totals for this area</label><div class="small" id="eTotals" style="padding-top:8px"></div></div>
+          </div>
+          <div class="field"><label for="eDesc">Description (users see this)</label><textarea id="eDesc" rows="3" placeholder="Road access, soil, water, distance from town…"></textarea></div>
+          <div class="field"><label for="eNotes">Private admin notes (users never see this)</label><textarea id="eNotes" rows="2" placeholder="Owner names, Pahani notes, EC, seller's lowest price…"></textarea></div>
+          <div class="row"><button class="primary" type="submit">Save listing</button><button type="button" class="ghost danger" id="eDelete">Delete</button></div>
+
+          <h2 style="margin-top:6px">Photos &amp; documents</h2>
+          <p class="small" id="filesHint" style="margin:0">Save the listing first, then add photos.</p>
+          <div class="row" id="fileRow" hidden>
+            <button type="button" id="addFiles">Add photos / PDFs</button>
+            <label class="switch" style="margin:0;gap:6px">Visible to users <input type="checkbox" id="filePublic" checked></label>
+          </div>
+          <input type="file" id="fileIn" multiple accept="image/*,application/pdf" hidden>
+          <div class="photos" id="ePhotos"></div>
+        </form>
+      </section>
+
+      <!-- MEASURE -->
+      <section class="view" id="view-measure" hidden>
+        <div class="section">
+          <h2>Measure</h2>
+          <p class="small" style="margin:0">Quick measuring. Nothing here is saved.</p>
+          <div class="row"><button type="button" class="primary" id="mPlot">Measure area</button><button type="button" id="mLine">Measure distance</button><button type="button" class="ghost danger" id="mClear">Clear all</button></div>
+        </div>
+        <div id="measureList" class="section"></div>
+      </section>
+
+      <!-- SKETCH -->
+      <section class="view" id="view-sketch" hidden>
+        <div class="section">
+          <h2>Sketch</h2>
+          <p class="small" style="margin:0">Pick <b>Pen</b> to draw, <b>Move</b> to pan. Scroll or pinch to zoom any time. <b>Save</b> is on the toolbar too.</p>
+          <div class="field"><label for="sketchName">Sketch name</label><input id="sketchName"></div>
+          <div class="row"><button type="button" class="primary" id="sketchSave">Save</button><button type="button" id="sketchNew">New sketch</button><button type="button" class="ghost danger" id="sketchClear">Clear</button></div>
+          <p class="small" id="sketchState" style="margin:0"></p>
+        </div>
+        <div class="section"><h2>My saved sketches</h2><div id="sketchList"></div></div>
+      </section>
+
+      <!-- USERS -->
+      <section class="view" id="view-users" hidden>
+        <form class="section card" id="userForm">
+          <h2>Create a user</h2>
+          <div class="grid2">
+            <div class="field"><label for="uName">Name</label><input id="uName" placeholder="Ravi Kumar"></div>
+            <div class="field"><label for="uUser">Username</label><input id="uUser" required autocomplete="off" placeholder="ravi"></div>
+            <div class="field"><label for="uPass">Password</label><input id="uPass" required minlength="6" autocomplete="new-password"></div>
+            <div class="field"><label for="uRole">Role</label><select id="uRole"><option value="user">User</option><option value="admin">Admin</option></select></div>
+          </div>
+          <button class="primary" type="submit">Create user</button>
+        </form>
+        <div class="section"><h2>Users</h2><div class="tbl-wrap"><table class="tbl" id="userTable"></table></div></div>
+      </section>
+
+      <!-- SETTINGS -->
+      <section class="view" id="view-settings" hidden>
+        <form class="section" id="settingsForm">
+          <h2>What users can see</h2>
+          <label class="switch">Survey numbers layer available to users <input type="checkbox" id="sSurvey"></label>
+          <label class="switch">Survey numbers on when users open the map <input type="checkbox" id="sSurveyDefault"></label>
+          <label class="switch">Listings tab <input type="checkbox" id="sTabListings"></label>
+          <label class="switch">Measure tab <input type="checkbox" id="sTabMeasure"></label>
+          <label class="switch">Sketch tab <input type="checkbox" id="sTabSketch"></label>
+
+          <h2 style="margin-top:10px">General</h2>
+          <div class="field"><label for="sAppName">App name</label><input id="sAppName" maxlength="60"></div>
+          <div class="field"><label>Map opens at</label><div class="row"><span class="small num" id="sCenter"></span><button type="button" id="sUseView">Use current map view</button></div></div>
+          <div class="field"><label for="sGoogle">Google Maps API key (optional, adds Google satellite and better search)</label><input id="sGoogle" placeholder="AIza…" autocomplete="off"></div>
+          <details><summary class="small">Survey layer source (advanced)</summary>
+            <div class="field" style="margin-top:6px"><label for="sCadUrl">WMS server</label><input id="sCadUrl"></div>
+            <div class="field" style="margin-top:6px"><label for="sCadLayer">Layer</label><input id="sCadLayer"></div>
+          </details>
+          <button class="primary" type="submit">Save settings</button>
+        </form>
+      </section>
+
+    </div>
+  </aside>
+</div>
+
+<script src="/vendor/leaflet/leaflet.js"></script>
+<script src="/vendor/geoman/leaflet-geoman.min.js"></script>
+<script src="/map-core.js"></script>
+<script>
+(async () => {
+const { $, esc, api, toast } = LM;
+const me = await api('GET', '/api/me');
+let S = me.settings;
+$('appName').textContent = S.appName; document.title = 'Admin · ' + S.appName;
+
+const ctx = LM.createMap($('map'), S);
+const map = ctx.map;
+if (S.googleKey) ctx.loadGoogle(S.googleKey);
+const saved = LM.lsGet('lm.survey'); ctx.setSurvey(saved === null ? true : saved === '1');
+ctx.onChange(() => LM.lsSet('lm.survey', ctx.cad.on ? '1' : '0'));
+LM.LayersControl(ctx, $('layersBtn'), $('layersPop'), { surveyAllowed: () => true });
+LM.Locate(ctx, $('locateBtn'));
+LM.Search(ctx, $('searchIn'), $('results'));
+const draw = LM.DrawTool(ctx, $('mapWrap'));
+const sketch = LM.Sketch(ctx, $('mapWrap'));
+const measure = LM.Measure(ctx, draw, $('measureList'));
+map.pm.setGlobalOptions({ allowSelfIntersection: false, snappable: false });
+
+// ---------- tabs ----------
+let tab = null;
+$('tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) setTab(b.dataset.tab); });
+let sketchPanelWas = null;
+function setTab(t) {
+  if (tab === t) return;
+  draw.cancel(true); stopCornerEdit();
+  if (tab === 'sketch') { sketch.disable(); document.body.classList.remove('sketching'); if (sketchPanelWas) panel.open(); sketchPanelWas = null; }
+  if (tab === 'measure') measure.hide();
+  tab = t;
+  document.querySelectorAll('#tabs [data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
+  ['listings', 'measure', 'sketch', 'users', 'settings'].forEach(v => $('view-' + v).hidden = v !== t);
+  $('panelTitle').textContent = ({ listings: 'Listings', measure: 'Measure', sketch: 'Sketch', users: 'Users', settings: 'Settings' })[t];
+  $('mainEl').classList.toggle('wide', t === 'listings' && !$('editor').hidden);
+  if (t === 'measure') measure.show();
+  if (t === 'sketch') { sketch.enable(); document.body.classList.add('sketching'); sketchPanelWas = panel.isOpen(); panel.close(); } else sketch.hideLayer();
+  if (t === 'users') loadUsers();
+  if (t === 'settings') fillSettings();
+  LM.lsSet('lm.adminTab', t);
+}
+const panel = LM.Panel(ctx, $('panel'), $('panelHead'), $('panelToggle'), $('panelBtn'));
+$('logoutBtn').onclick = async () => { await api('POST', '/api/logout'); location.href = '/login'; };
+
+// ---------- listings ----------
+const listingLayer = L.featureGroup().addTo(map);
+const editLabels = L.featureGroup().addTo(map);
+let listings = [], filter = 'all';
+let edit = null; // { id|null, coords, layer }
+async function loadListings() { listings = (await api('GET', '/api/listings')).listings; drawListings(); renderList(); }
+const passes = l => filter === 'all' || (filter === 'published' ? l.published : filter === 'draft' ? !l.published : l.status === filter);
+function drawListings() {
+  listingLayer.clearLayers();
+  listings.forEach(l => {
+    if (edit && edit.id === l.id) return;
+    if (!passes(l)) return;
+    const c = LM.COLORS[l.status] || LM.COLORS.available;
+    const poly = L.polygon(LM.toLL(l.coords), { color: c, weight: 2.5, fillColor: c, fillOpacity: l.published ? 0.3 : 0.12, dashArray: l.published ? null : '6 5' });
+    poly.bindTooltip(esc(l.name || 'Listing') + (l.published ? '' : ' (draft)'), { sticky: true, className: 'listing-tip' });
+    poly.on('click', e => { if (tab !== 'listings' || draw.active) return; L.DomEvent.stop(e); openEditor(l.id); });
+    listingLayer.addLayer(poly);
+  });
+}
+function renderList() {
+  const items = listings.filter(passes).sort((a, b) => b.updatedAt - a.updatedAt);
+  $('listingList').innerHTML = items.length ? items.map(l => {
+    const a = LM.sphericalArea(LM.toLL(l.coords));
+    return '<button type="button" class="item" data-id="' + l.id + '"><span class="t"><i class="dot" style="background:' + LM.COLORS[l.status] + '"></i>' + esc(l.name || 'Untitled') +
+      (l.published ? '' : ' <span class="badge draft">Draft</span>') + '</span>' +
+      '<span class="small">' + [l.village, l.mandal].filter(Boolean).map(esc).join(', ') + (l.survey ? ' · Sy. ' + esc(l.survey) : '') + '</span>' +
+      '<span class="small"><b class="num">' + LM.areaText(a) + '</b> · ' + LM.rupeeShort(l.ask) + ' / acre · ' + (l.files || []).length + ' files</span></button>';
+  }).join('') : '<p class="empty">No listings here yet.</p>';
+  $('listingList').querySelectorAll('[data-id]').forEach(b => b.onclick = () => openEditor(b.dataset.id, true));
+}
+$('filters').addEventListener('click', e => { const b = e.target.closest('[data-f]'); if (!b) return; filter = b.dataset.f; $('filters').querySelectorAll('[data-f]').forEach(x => x.classList.toggle('on', x === b)); drawListings(); renderList(); });
+
+const E = id => $(id);
+const FORM = { eName: 'name', eStatus: 'status', eSurvey: 'survey', eVillage: 'village', eMandal: 'mandal', eDistrict: 'district', eContact: 'contact', eAsk: 'ask', eNeg: 'neg', eFinal: 'final', eDesc: 'description', eNotes: 'adminNotes' };
+$('newListing').onclick = () => {
+  closeEditor();
+  draw.start('plot', pts => {
+    edit = { id: null, coords: LM.toCoords(pts) };
+    showEditor({ status: 'available', published: false, files: [] });
+    panel.open();
+  }, 'New listing: tap the plot corners');
+};
+function openEditor(id, fly) {
+  const l = listings.find(x => x.id === id); if (!l) return;
+  closeEditor(); edit = { id, coords: l.coords.slice() };
+  showEditor(l);
+  if (fly) map.fitBounds(L.latLngBounds(LM.toLL(l.coords)), { maxZoom: 19, padding: [50, 50] });
+  panel.open();
+}
+function showEditor(l) {
+  for (const id in FORM) E(id).value = l[FORM[id]] ?? (id === 'eStatus' ? 'available' : '');
+  E('ePublished').checked = !!l.published;
+  $('listHome').hidden = true; $('editor').hidden = false; $('mainEl').classList.add('wide');
+  $('saveState').textContent = edit.id ? 'Last saved ' + new Date(l.updatedAt).toLocaleString() : 'Not saved yet';
+  drawEditShape(); renderFiles(l); drawListings();
+}
+function drawEditShape() {
+  if (edit.layer) map.removeLayer(edit.layer);
+  const st = E('eStatus').value, c = LM.COLORS[st];
+  edit.layer = L.polygon(LM.toLL(edit.coords), { color: c, weight: 3.5, fillColor: c, fillOpacity: 0.3 }).addTo(map);
+  edit.layer.on('pm:markerdrag pm:edit', () => { edit.coords = LM.toCoords(edit.layer.getLatLngs()[0]); geoInfo(); });
+  geoInfo();
+}
+function geoInfo() {
+  const ll = LM.toLL(edit.coords), a = LM.areaParts(LM.sphericalArea(ll));
+  LM.edgeLabels(ctx, editLabels, ll, true, true);
+  $('eGeo').innerHTML = '<div class="kv"><span>Area</span><b>' + LM.areaText(a.m2) + '</b><span>Acres</span><b>' + a.acres.toFixed(3) + '</b><span>Sq yards</span><b>' + LM.fmt(a.sqyd) + '</b><span>Boundary</span><b>' + ctx.unitText(LM.pathLength(ll, true)) + '</b></div>' +
+    '<div class="sides">' + LM.sideList(ctx, ll, true).map((t, k) => '<span>' + String.fromCharCode(65 + (k % 26)) + ': ' + t + '</span>').join('') + '</div>';
+  const tot = v => LM.num(v) ? LM.rupeeShort(LM.num(v) * a.acres) : '—';
+  $('eTotals').innerHTML = 'Asking ' + tot(E('eAsk').value) + '<br>Final ' + tot(E('eFinal').value);
+  if (!$('cornerBar').hidden) $('cornerStats').innerHTML = '<span>Corners <b>' + ll.length + '</b></span><span>Area <b>' + LM.areaText(a.m2) + '</b></span><span><b>' + LM.fmt(a.sqyd) + '</b> sq yd</span><span>Boundary <b>' + ctx.unitText(LM.pathLength(ll, true)) + '</b></span>';
+}
+['eAsk', 'eFinal'].forEach(id => E(id).addEventListener('input', () => edit && geoInfo()));
+E('eStatus').addEventListener('change', () => edit && drawEditShape());
+ctx.onChange(() => { if (edit && edit.layer) geoInfo(); });
+function stopCornerEdit() {
+  if (edit && edit.layer && edit.layer.pm && edit.layer.pm.enabled()) {
+    edit.layer.pm.disable(); $('eEditCorners').textContent = 'Edit corners'; $('cornerBar').hidden = true; ctx.setFocus(false);
+  }
+}
+$('eEditCorners').onclick = () => {
+  if (!edit) return;
+  if (edit.layer.pm.enabled()) return stopCornerEdit();
+  edit.before = JSON.stringify(edit.coords);
+  edit.layer.pm.enable({ allowSelfIntersection: false, snappable: false }); $('eEditCorners').textContent = 'Done editing corners';
+  $('cornerBar').hidden = false; ctx.setFocus(true); geoInfo();
+};
+$('cornerDone').onclick = () => { stopCornerEdit(); if (edit && JSON.stringify(edit.coords) !== edit.before) $('saveState').textContent = 'Unsaved changes'; };
+$('eRedraw').onclick = () => {
+  if (!edit) return; stopCornerEdit();
+  draw.start('plot', pts => { edit.coords = LM.toCoords(pts); drawEditShape(); $('saveState').textContent = 'Unsaved changes'; }, 'Redraw boundary: tap the new corners');
+};
+function closeEditor() {
+  stopCornerEdit(); draw.cancel(true);
+  if (edit && edit.layer) map.removeLayer(edit.layer);
+  edit = null; editLabels.clearLayers();
+  $('editor').hidden = true; $('listHome').hidden = false; $('mainEl').classList.remove('wide');
+  drawListings();
+}
+$('backBtn').onclick = closeEditor;
+$('editor').onsubmit = async e => {
+  e.preventDefault(); if (!edit) return; stopCornerEdit();
+  const body = { coords: edit.coords, published: E('ePublished').checked };
+  for (const id in FORM) body[FORM[id]] = E(id).value;
+  try {
+    const r = edit.id ? await api('PUT', '/api/listings/' + edit.id, body) : await api('POST', '/api/listings', body);
+    edit.id = r.listing.id;
+    const i = listings.findIndex(x => x.id === r.listing.id); if (i >= 0) listings[i] = r.listing; else listings.push(r.listing);
+    $('saveState').textContent = 'Saved ' + new Date().toLocaleTimeString();
+    toast(r.listing.published ? 'Saved and visible to users' : 'Saved as draft (not visible to users)');
+    renderFiles(r.listing); renderList();
+  } catch (ex) { toast(ex.message); }
+};
+E('ePublished').addEventListener('change', () => { if (edit && edit.id) $('editor').requestSubmit(); });
+let delArmed = false;
+$('eDelete').onclick = async () => {
+  if (!edit) return;
+  if (!edit.id) return closeEditor();
+  if (!delArmed) { delArmed = true; $('eDelete').textContent = 'Tap again to delete'; setTimeout(() => { delArmed = false; $('eDelete').textContent = 'Delete'; }, 3000); return; }
+  await api('DELETE', '/api/listings/' + edit.id);
+  listings = listings.filter(x => x.id !== edit.id); toast('Listing deleted'); closeEditor(); renderList();
+};
+
+// files
+function renderFiles(l) {
+  const saved = !!(edit && edit.id);
+  $('filesHint').hidden = saved; $('fileRow').hidden = !saved;
+  const files = (l && l.files) || [];
+  $('ePhotos').innerHTML = files.map(f => '<div class="photo">' + (f.type.startsWith('image/') ? '<a href="/files/' + esc(f.stored) + '" target="_blank" rel="noopener"><img alt="" src="/files/' + esc(f.stored) + '"></a>' : '<a href="/files/' + esc(f.stored) + '" target="_blank" rel="noopener">' + esc(f.name) + '</a>') +
+    '<button type="button" class="x" data-del="' + f.id + '" title="Remove">✕</button>' + (f.public === false ? '<span class="badge draft" style="position:absolute;left:3px;bottom:3px">Private</span>' : '') + '</div>').join('');
+  $('ePhotos').querySelectorAll('[data-del]').forEach(b => {
+    let armed = false;
+    b.onclick = async ev => {
+      ev.preventDefault();
+      if (!armed) { armed = true; b.textContent = 'Sure?'; setTimeout(() => { armed = false; b.textContent = '✕'; }, 2500); return; }
+      const r = await api('DELETE', '/api/listings/' + edit.id + '/files/' + b.dataset.del); updateListing(r.listing); renderFiles(r.listing);
+    };
+  });
+}
+function updateListing(l) { const i = listings.findIndex(x => x.id === l.id); if (i >= 0) listings[i] = l; renderList(); }
+$('addFiles').onclick = () => $('fileIn').click();
+function readAsDataURL(file) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file); }); }
+async function shrinkImage(file) { // keep photos light: max 1800px, JPEG
+  if (!file.type.startsWith('image/') || file.type === 'image/gif') return readAsDataURL(file);
+  try {
+    const bmp = await createImageBitmap(file); const scale = Math.min(1, 1800 / Math.max(bmp.width, bmp.height));
+    const c = document.createElement('canvas'); c.width = Math.round(bmp.width * scale); c.height = Math.round(bmp.height * scale);
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height); return c.toDataURL('image/jpeg', 0.85);
+  } catch (e) { return readAsDataURL(file); }
+}
+$('fileIn').onchange = async e => {
+  const files = [...e.target.files]; e.target.value = ''; if (!edit || !edit.id) return;
+  for (const f of files) {
+    toast('Uploading ' + f.name + '…');
+    try {
+      const data = await shrinkImage(f);
+      const name = f.type.startsWith('image/') && f.type !== 'image/gif' ? f.name.replace(/\.[^.]+$/, '') + '.jpg' : f.name;
+      const r = await api('POST', '/api/listings/' + edit.id + '/files', { name, data, public: $('filePublic').checked });
+      updateListing(r.listing); renderFiles(r.listing);
+    } catch (ex) { toast(ex.message); }
+  }
+  toast('Upload finished');
+};
+
+// ---------- measure ----------
+$('mPlot').onclick = () => measure.start('plot');
+$('mLine').onclick = () => measure.start('line');
+$('mClear').onclick = () => { draw.cancel(true); measure.clear(); };
+
+// ---------- sketch ----------
+let currentSketch = null, sketches = [];
+function sketchState() { $('sketchState').textContent = currentSketch ? (sketch.dirty ? 'Unsaved changes' : 'Saved') : (sketch.items.length ? 'Not saved yet' : ''); }
+sketch.onDirty = sketchState;
+sketch.onSave = () => $('sketchSave').click();
+async function loadSketches() { sketches = (await api('GET', '/api/sketches')).sketches; renderSketches(); }
+function renderSketches() {
+  $('sketchList').innerHTML = sketches.length ? sketches.slice().sort((a, b) => b.updatedAt - a.updatedAt).map(s =>
+    '<div class="item' + (currentSketch && currentSketch.id === s.id ? ' sel' : '') + '"><span class="t">' + esc(s.name) + '</span><span class="small">' + new Date(s.updatedAt).toLocaleString() + ' · ' + s.items.length + ' marks</span>' +
+    '<div class="row"><button type="button" data-open="' + s.id + '">Open</button><button type="button" class="ghost danger" data-del="' + s.id + '">Delete</button></div></div>').join('') : '<p class="empty">No saved sketches yet.</p>';
+  $('sketchList').querySelectorAll('[data-open]').forEach(b => b.onclick = () => { const s = sketches.find(x => x.id === b.dataset.open); currentSketch = s; sketch.load(s.items); $('sketchName').value = s.name; if (s.view) map.setView(s.view.center, s.view.zoom); renderSketches(); sketchState(); });
+  $('sketchList').querySelectorAll('[data-del]').forEach(b => { let armed = false; b.onclick = async () => {
+    if (!armed) { armed = true; b.textContent = 'Tap again to delete'; setTimeout(() => { armed = false; b.textContent = 'Delete'; }, 2500); return; }
+    await api('DELETE', '/api/sketches/' + b.dataset.del); if (currentSketch && currentSketch.id === b.dataset.del) { currentSketch = null; sketch.load([]); $('sketchName').value = ''; } loadSketches(); sketchState(); }; });
+}
+$('sketchSave').onclick = async () => {
+  if (!sketch.items.length) return toast('Draw something first.');
+  const c = map.getCenter();
+  const r = await api('POST', '/api/sketches', { id: currentSketch && currentSketch.id, name: $('sketchName').value.trim() || 'Sketch ' + new Date().toLocaleDateString(), items: sketch.items, view: { center: [c.lat, c.lng], zoom: map.getZoom() } });
+  currentSketch = r.sketch; sketch.dirty = false; $('sketchName').value = r.sketch.name; toast('Sketch saved'); loadSketches(); sketchState();
+};
+$('sketchNew').onclick = () => { currentSketch = null; sketch.load([]); $('sketchName').value = ''; renderSketches(); sketchState(); };
+$('sketchClear').onclick = () => { sketch.clear(); sketchState(); };
+
+// ---------- users ----------
+async function loadUsers() {
+  const { users } = await api('GET', '/api/users');
+  $('userTable').innerHTML = '<tr><th>Name</th><th>Username</th><th>Role</th><th></th></tr>' + users.map(u =>
+    '<tr><td>' + esc(u.name) + '</td><td>' + esc(u.username) + '</td><td>' + (u.role === 'admin' ? 'Admin' : 'User') + '</td><td style="white-space:nowrap">' +
+    '<button type="button" data-reset="' + u.id + '">Reset password</button> ' + (u.id === me.user.id ? '<span class="small">You</span>' : '<button type="button" class="ghost danger" data-del="' + u.id + '">Delete</button>') + '</td></tr>' +
+    '<tr data-resetrow="' + u.id + '" hidden><td colspan="4"><form class="row" data-resetform="' + u.id + '"><input type="password" minlength="6" required placeholder="New password (6+ characters)" style="flex:1" autocomplete="new-password"><button class="primary" type="submit">Set</button></form></td></tr>').join('');
+  $('userTable').querySelectorAll('[data-reset]').forEach(b => b.onclick = () => { const r = $('userTable').querySelector('[data-resetrow="' + b.dataset.reset + '"]'); r.hidden = !r.hidden; });
+  $('userTable').querySelectorAll('[data-resetform]').forEach(f => f.onsubmit = async e => {
+    e.preventDefault(); try { await api('PUT', '/api/users/' + f.dataset.resetform, { password: f.querySelector('input').value }); toast('Password updated'); loadUsers(); } catch (ex) { toast(ex.message); }
+  });
+  $('userTable').querySelectorAll('[data-del]').forEach(b => { let armed = false; b.onclick = async () => {
+    if (!armed) { armed = true; b.textContent = 'Tap again'; setTimeout(() => { armed = false; b.textContent = 'Delete'; }, 2500); return; }
+    try { await api('DELETE', '/api/users/' + b.dataset.del); toast('User deleted'); loadUsers(); } catch (ex) { toast(ex.message); } }; });
+}
+$('userForm').onsubmit = async e => {
+  e.preventDefault();
+  try { await api('POST', '/api/users', { name: $('uName').value, username: $('uUser').value, password: $('uPass').value, role: $('uRole').value }); toast('User created'); e.target.reset(); loadUsers(); }
+  catch (ex) { toast(ex.message); }
+};
+
+// ---------- settings ----------
+let pendingView = null;
+function fillSettings() {
+  $('sSurvey').checked = S.showSurvey; $('sSurveyDefault').checked = S.surveyOnByDefault;
+  $('sTabListings').checked = S.tabs.listings; $('sTabMeasure').checked = S.tabs.measure; $('sTabSketch').checked = S.tabs.sketch;
+  $('sAppName').value = S.appName; $('sGoogle').value = S.googleKey || ''; $('sCadUrl').value = S.cadUrl; $('sCadLayer').value = S.cadLayer;
+  pendingView = null; $('sCenter').textContent = S.center.map(n => n.toFixed(4)).join(', ') + ' · zoom ' + S.zoom;
+}
+$('sUseView').onclick = () => { const c = map.getCenter(); pendingView = { center: [+c.lat.toFixed(6), +c.lng.toFixed(6)], zoom: Math.round(map.getZoom()) }; $('sCenter').textContent = pendingView.center.join(', ') + ' · zoom ' + pendingView.zoom + ' (save to apply)'; };
+$('settingsForm').onsubmit = async e => {
+  e.preventDefault();
+  const body = { showSurvey: $('sSurvey').checked, surveyOnByDefault: $('sSurveyDefault').checked, tabs: { listings: $('sTabListings').checked, measure: $('sTabMeasure').checked, sketch: $('sTabSketch').checked },
+    appName: $('sAppName').value, googleKey: $('sGoogle').value, cadUrl: $('sCadUrl').value, cadLayer: $('sCadLayer').value, ...(pendingView || {}) };
+  try {
+    const r = await api('PUT', '/api/settings', body);
+    const keyChanged = r.settings.googleKey !== S.googleKey;
+    Object.assign(S, r.settings); fillSettings(); $('appName').textContent = S.appName; ctx.refreshSurvey();
+    toast(keyChanged ? 'Settings saved. Reload the page to apply the Google key.' : 'Settings saved');
+  } catch (ex) { toast(ex.message); }
+};
+
+// ---------- start ----------
+const startTab = LM.lsGet('lm.adminTab');
+setTab(['listings', 'measure', 'sketch', 'users', 'settings'].includes(startTab) ? startTab : 'listings');
+await loadListings(); loadSketches();
+if (listings.length && !LM.lsGet('lm.adminFit')) { map.fitBounds(listingLayer.getBounds(), { maxZoom: 17, padding: [40, 40] }); LM.lsSet('lm.adminFit', '1'); }
+})().catch(e => console.error(e));
+</script>
+</body>
+</html>

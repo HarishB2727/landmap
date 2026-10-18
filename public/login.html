@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sign in · Land Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap">
+<link rel="stylesheet" href="/style.css">
+<style>
+  body { display: grid; place-items: center; padding: 16px; overflow: auto;
+    background: linear-gradient(160deg, #e7eee5 0%, #f2f4f0 55%, #e3ebe6 100%); }
+  .box { width: 100%; max-width: 360px; background: #fff; border-radius: 16px; box-shadow: var(--shadow); padding: 28px 24px; display: flex; flex-direction: column; gap: 14px; }
+  .box h1 { font: 800 22px/1.2 var(--display); margin: 4px 0 0; }
+  .err { color: var(--warn); font-size: 13px; min-height: 18px; }
+  .box button.primary { padding: 11px; }
+</style>
+</head>
+<body>
+  <form class="box" id="f">
+    <div class="brand"><i></i><span id="appName">Land Map</span></div>
+    <h1>Sign in</h1>
+    <div class="field"><label for="u">Username</label><input id="u" autocomplete="username" required></div>
+    <div class="field"><label for="p">Password</label><input id="p" type="password" autocomplete="current-password" required></div>
+    <div class="err" id="err"></div>
+    <button class="primary" type="submit">Sign in</button>
+    <p class="small" style="margin:0">Accounts are created by the admin. Ask them if you need access.</p>
+  </form>
+<script>
+document.getElementById('f').addEventListener('submit', async e => {
+  e.preventDefault();
+  const err = document.getElementById('err'); err.textContent = '';
+  try {
+    const r = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: u.value.trim(), password: p.value }) });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Could not sign in.');
+    location.href = j.user.role === 'admin' ? '/admin' : '/app';
+  } catch (ex) { err.textContent = ex.message; }
+});
+</script>
+</body>
+</html>
